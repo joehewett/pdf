@@ -7,7 +7,6 @@
 package pdf
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -77,8 +76,8 @@ func (b *buffer) readByte() byte {
 	return c
 }
 
-func (b *buffer) errorf(format string, args ...interface{}) string {
-	return fmt.Sprintf(format, args...)
+func (b *buffer) errorf(format string, args ...interface{}) error {
+	return fmt.Errorf(format, args...)
 }
 
 // reload reads more data from the input stream.
@@ -286,7 +285,7 @@ Loop:
 					x = x*8 + int(c-'0')
 				}
 				if x > 255 {
-					b.errorf("invalid octal escape \\%03o", x)
+					fmt.Printf("invalid octal escape \\%03o", x)
 				}
 				tmp = append(tmp, byte(x))
 			}
@@ -438,9 +437,8 @@ func (b *buffer) readObject() (object, error) {
 		case "[":
 			return b.readArray(), nil
 		}
-		// b.errorf("unexpected keyword %q parsing object", kw)
-		return nil, errors.New(b.errorf("unexpected keyword %q parsing object", kw))
-		// return nil
+
+		return nil, fmt.Errorf("unexpected keyword %q parsing object", kw)
 	}
 
 	if str, ok := tok.(string); ok && b.key != nil && b.objptr.id != 0 {
