@@ -741,7 +741,6 @@ func (v Value) Len() int {
 //
 //	bugfix: in case the object-ref is within a stream than nothing was returned
 func (r *Reader) resolve(parent objptr, x interface{}) Value {
-
 	if ptr, ok := x.(objptr); ok {
 		if ptr.id >= uint32(len(r.xref)) {
 			return Value{}

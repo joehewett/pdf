@@ -240,8 +240,7 @@ type TextEncoding interface {
 	Decode(raw string) (text string)
 }
 
-type nopEncoder struct {
-}
+type nopEncoder struct{}
 
 func (e *nopEncoder) Decode(raw string) (text string) {
 	return raw
@@ -760,11 +759,10 @@ func (p Page) walkTextBlocks(walker func(enc TextEncoding, x, y float64, s strin
 //	the /Content may contain an array of refs
 //	this leads to an endless loop
 func (p Page) Content() Content {
-
 	var text []Text
 	var rect []Rect
 
-	//fmt.Println("page=",p)
+	// fmt.Println("page=",p)
 	strm := p.V.Key("Contents")
 
 	if strm.Len() == 0 {
@@ -774,7 +772,7 @@ func (p Page) Content() Content {
 	} else {
 		for i := 0; i < strm.Len(); i++ {
 			strmindex := strm.Index(i)
-			//fmt.Println("stream ",i,"=",strmindex)
+			// fmt.Println("stream ",i,"=",strmindex)
 
 			c := p.readContent(strmindex)
 			text = append(text, c.Text...)
@@ -787,7 +785,7 @@ func (p Page) Content() Content {
 func (p Page) readContent(strm Value) Content {
 	var enc TextEncoding = &nopEncoder{}
 
-	var g = gstate{
+	g := gstate{
 		Th:  1,
 		CTM: ident,
 	}
