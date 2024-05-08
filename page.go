@@ -752,18 +752,18 @@ func (p Page) walkTextBlocks(walker func(enc TextEncoding, x, y float64, s strin
 		}
 	})
 }
-//
+
 // Content returns the page's content.
 //
-// bugfix: 
+// bugfix:
+//
 //	the /Content may contain an array of refs
 //	this leads to an endless loop
-//
 func (p Page) Content() Content {
-	
+
 	var text []Text
 	var rect []Rect
-	
+
 	//fmt.Println("page=",p)
 	strm := p.V.Key("Contents")
 
@@ -779,7 +779,7 @@ func (p Page) Content() Content {
 			c := p.readContent(strmindex)
 			text = append(text, c.Text...)
 			rect = append(rect, c.Rect...)
-		}	
+		}
 	}
 	return Content{text, rect}
 }
@@ -791,7 +791,7 @@ func (p Page) readContent(strm Value) Content {
 		Th:  1,
 		CTM: ident,
 	}
-	
+
 	var text []Text
 	showText := func(s string) {
 		n := 0
@@ -872,7 +872,7 @@ func (p Page) readContent(strm Value) Content {
 
 		case "Q": // restore graphics state
 			n := len(gstack) - 1
-			if n >= 0 {	// bugfix: don't raise an exception
+			if n >= 0 { // bugfix: don't raise an exception
 				g = gstack[n]
 				gstack = gstack[:n]
 			}
@@ -944,14 +944,15 @@ func (p Page) readContent(strm Value) Content {
 			showText(args[0].RawString())
 
 		case "TJ": // show text, allowing individual glyph positioning
-			if len(args) > 0 {	// bugfix: don't raise an exception
+			if len(args) > 0 { // bugfix: don't raise an exception
 				v := args[0]
 				for i := 0; i < v.Len(); i++ {
 					x := v.Index(i)
 					if x.Kind() == String {
 						if i == v.Len()-1 {
 							showText(x.RawString())
-							op = "BT"
+							// TODO (joe) this is not doing anything. What is it supposed to do?
+							// op = "BT"
 							continue
 						} else {
 							showText(x.RawString())
@@ -961,7 +962,6 @@ func (p Page) readContent(strm Value) Content {
 						g.Tm = matrix{{1, 0, 0}, {0, 1, 0}, {tx, 0, 1}}.mul(g.Tm)
 					}
 				}
-				// showText("\n")
 			}
 
 		case "TL": // set text leading

@@ -4,7 +4,7 @@
 
 // Package pdf implements reading of PDF files.
 //
-// Overview
+// # Overview
 //
 // PDF is Adobe's Portable Document Format, ubiquitous on the internet.
 // A PDF document is a complex data format built on a fairly simple structure.
@@ -43,7 +43,6 @@
 // they are implemented only in terms of the Value API and could be moved outside
 // the package. Equally important, traversal of other PDF data structures can be implemented
 // in other packages as needed.
-//
 package pdf
 
 // BUG(rsc): The package is incomplete, although it has been used successfully on some
@@ -70,7 +69,6 @@ import (
 	"encoding/ascii85"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strconv"
@@ -94,10 +92,6 @@ type xref struct {
 	offset   int64
 }
 
-func (r *Reader) errorf(format string, args ...interface{}) {
-	panic(fmt.Errorf(format, args...))
-}
-
 // Open opens a file for reading.
 func Open(file string) (*Reader, error) {
 	// TODO: Deal with closing file.
@@ -106,11 +100,13 @@ func Open(file string) (*Reader, error) {
 		f.Close()
 		return nil, err
 	}
+
 	fi, err := f.Stat()
 	if err != nil {
 		f.Close()
 		return nil, err
 	}
+
 	return NewReader(f, fi.Size())
 }
 
@@ -125,21 +121,32 @@ func NewReader(f io.ReaderAt, size int64) (*Reader, error) {
 // the file and returns an error.
 func NewReaderEncrypted(f io.ReaderAt, size int64, pw func() string) (*Reader, error) {
 	buf := make([]byte, 10)
-	f.ReadAt(buf, 0)
+
+	_, err := f.ReadAt(buf, 0)
+	if err != nil {
+		return nil, err
+	}
+
 	if !bytes.HasPrefix(buf, []byte("%PDF-1.")) || buf[7] < '0' || buf[7] > '7' || buf[8] != '\r' && buf[8] != '\n' {
 		return nil, fmt.Errorf("not a PDF file: invalid header")
 	}
 	end := size
 	const endChunk = 100
 	buf = make([]byte, endChunk)
-	f.ReadAt(buf, end-endChunk)
+	_, err = f.ReadAt(buf, end-endChunk)
+	if err != nil {
+		return nil, err
+	}
+
 	for len(buf) > 0 && buf[len(buf)-1] == '\n' || buf[len(buf)-1] == '\r' {
 		buf = buf[:len(buf)-1]
 	}
+
 	buf = bytes.TrimRight(buf, "\r\n\t ")
 	if !bytes.HasSuffix(buf, []byte("%%EOF")) {
 		return nil, fmt.Errorf("not a PDF file: missing %%%%EOF")
 	}
+
 	i := findLastLine(buf, "startxref")
 	if i < 0 {
 		return nil, fmt.Errorf("malformed PDF file: missing final startxref")
@@ -622,7 +629,7 @@ func (v Value) RawString() string {
 	return x
 }
 
-// Text returns v's string value interpreted as a ``text string'' (defined in the PDF spec)
+// Text returns v's string value interpreted as a “text string” (defined in the PDF spec)
 // and converted to UTF-8.
 // If v.Kind() != String, Text returns the empty string.
 func (v Value) Text() string {
@@ -726,13 +733,13 @@ func (v Value) Len() int {
 	}
 	return len(x)
 }
-//
+
 // resolve xrefs
+//
 //	in: the parent and the key or reference to resolve
 //	out: the reference
 //
-//	bugfix: in case the object-ref is within a stream than nothing was returned 
-//
+//	bugfix: in case the object-ref is within a stream than nothing was returned
 func (r *Reader) resolve(parent objptr, x interface{}) Value {
 
 	if ptr, ok := x.(objptr); ok {
@@ -746,32 +753,42 @@ func (r *Reader) resolve(parent objptr, x interface{}) Value {
 		// var obj object
 		if xref.inStream {
 			strm := r.resolve(parent, xref.stream)
-			
+
 		Search:
 			for {
 				if strm.Kind() != Stream {
 					panic("not a stream")
 				}
+
 				if strm.Key("Type").Name() != "ObjStm" {
 					panic("not an object stream")
 				}
+
 				n := int(strm.Key("N").Int64())
 				first := strm.Key("First").Int64()
 				if first == 0 {
 					panic("missing First")
 				}
+
 				b := newBuffer(strm.Reader(), 0)
 				b.allowEOF = true
+
 				for i := 0; i < n; i++ {
 					id, _ := b.readToken().(int64)
 					off, _ := b.readToken().(int64)
 					if uint32(id) == ptr.id {
-						b.seekForward(first + off)
+						err := b.seekForward(first + off)
+						if err != nil {
+							return Value{}
+						}
+
 						objinstream, err := b.readObject()
 						if err != nil {
 							return Value{}
 						}
+
 						x = objinstream
+
 						break Search
 					}
 				}
@@ -785,15 +802,17 @@ func (r *Reader) resolve(parent objptr, x interface{}) Value {
 			b := newBuffer(io.NewSectionReader(r.f, xref.offset, r.end-xref.offset), xref.offset)
 			b.key = r.key
 			b.useAES = r.useAES
+
 			obj, err := b.readObject()
 			if err != nil {
 				return Value{}
 			}
+
 			def, ok := obj.(objdef)
 			if !ok {
 				panic(fmt.Errorf("loading %v: found %T instead of objdef", ptr, obj))
-				//return Value{}
 			}
+
 			if def.ptr != ptr {
 				panic(fmt.Errorf("loading %v: found %v", ptr, def.ptr))
 			}
@@ -808,8 +827,8 @@ func (r *Reader) resolve(parent objptr, x interface{}) Value {
 	case string:
 		return Value{r, parent, x}
 	default:
-		// panic(fmt.Errorf("unexpected value type %T in resolve", x))
-		fmt.Sprintf("unexpected value type %T in resolve", x)
+		fmt.Printf("unexpected value type %T in resolve", x)
+
 		return Value{}
 	}
 }
@@ -828,7 +847,7 @@ func (e *errorReadCloser) Close() error {
 
 // Reader returns the data contained in the stream v.
 // If v.Kind() != Stream, Reader returns a ReadCloser that
-// responds to all reads with a ``stream not present'' error.
+// responds to all reads with a “stream not present” error.
 func (v Value) Reader() io.ReadCloser {
 	x, ok := v.data.(stream)
 	if !ok {
@@ -854,7 +873,7 @@ func (v Value) Reader() io.ReadCloser {
 		}
 	}
 
-	return ioutil.NopCloser(rd)
+	return io.NopCloser(rd)
 }
 
 func applyFilter(rd io.Reader, name string, param Value) io.Reader {
@@ -1052,7 +1071,12 @@ func okayV4(encrypt dict) bool {
 	if stmf != strf {
 		return false
 	}
+
 	cfparam, ok := cf[stmf].(dict)
+	if !ok {
+		return false
+	}
+
 	if cfparam["AuthEvent"] != nil && cfparam["AuthEvent"] != name("DocOpen") {
 		return false
 	}
@@ -1095,14 +1119,20 @@ func decryptStream(key []byte, useAES bool, ptr objptr, rd io.Reader) io.Reader 
 		if err != nil {
 			panic("AES: " + err.Error())
 		}
+
 		iv := make([]byte, 16)
-		io.ReadFull(rd, iv)
+		_, err = io.ReadFull(rd, iv)
+		if err != nil {
+			panic("AES: " + err.Error())
+		}
+
 		cbc := cipher.NewCBCDecrypter(cb, iv)
 		rd = &cbcReader{cbc: cbc, rd: rd, buf: make([]byte, 16)}
 	} else {
 		c, _ := rc4.NewCipher(key)
 		rd = &cipher.StreamReader{S: c, R: rd}
 	}
+
 	return rd
 }
 
@@ -1113,16 +1143,20 @@ type cbcReader struct {
 	pend []byte
 }
 
+// Read implements the io.Reader interface.
 func (r *cbcReader) Read(b []byte) (n int, err error) {
 	if len(r.pend) == 0 {
 		_, err = io.ReadFull(r.rd, r.buf)
 		if err != nil {
 			return 0, err
 		}
+
 		r.cbc.CryptBlocks(r.buf, r.buf)
 		r.pend = r.buf
 	}
+
 	n = copy(b, r.pend)
 	r.pend = r.pend[n:]
+
 	return n, nil
 }

@@ -21,7 +21,6 @@ import (
 //	string, a PDF string literal
 //	keyword, a PDF keyword
 //	name, a PDF name without the leading slash
-//
 type token interface{}
 
 // A name is a PDF name, without the leading slash.
@@ -60,49 +59,55 @@ func newBuffer(r io.Reader, offset int64) *buffer {
 	}
 }
 
-func (b *buffer) seek(offset int64) {
-	b.offset = offset
-	b.buf = b.buf[:0]
-	b.pos = 0
-	b.unread = b.unread[:0]
-}
-
 func (b *buffer) readByte() byte {
 	if b.pos >= len(b.buf) {
-		b.reload()
+		_, err := b.reload()
+		if err != nil {
+			return 0
+		}
+
 		if b.pos >= len(b.buf) {
 			return '\n'
 		}
 	}
+
 	c := b.buf[b.pos]
 	b.pos++
+
 	return c
 }
 
 func (b *buffer) errorf(format string, args ...interface{}) string {
-	// panic(fmt.Errorf(format, args...))
 	return fmt.Sprintf(format, args...)
 }
 
+// reload reads more data from the input stream.
 func (b *buffer) reload() (bool, error) {
 	n := cap(b.buf) - int(b.offset%int64(cap(b.buf)))
 	n, err := b.r.Read(b.buf[:n])
+
 	if n == 0 && err != nil {
 		b.buf = b.buf[:0]
 		b.pos = 0
+
 		if b.allowEOF && err == io.EOF {
 			b.eof = true
+
 			return false, err
 		}
-		fmt.Sprint(b.errorf("malformed PDF: reading at offset %d: %v", b.offset, err))
+
+		fmt.Printf("malformed PDF: reading at offset %d: %v", b.offset, err)
 		return false, err
 	}
+
 	b.offset += int64(n)
 	b.buf = b.buf[:n]
 	b.pos = 0
+
 	return true, err
 }
 
+// seekForward advances the buffer to the given offset.
 func (b *buffer) seekForward(offset int64) (err error) {
 	for b.offset < offset {
 		rel, err := b.reload()
@@ -181,11 +186,10 @@ func (b *buffer) readToken() token {
 
 	default:
 		if isDelim(c) {
-			// b.errorf("unexpected delimiter %#q", rune(c))
-			return b.errorf("unexpected delimiter %#q", rune(c))
-			// return nil
+			return fmt.Errorf("unexpected delimiter %#q", rune(c))
 		}
 		b.unreadByte()
+
 		return b.readKeyword()
 	}
 }
@@ -208,7 +212,7 @@ func (b *buffer) readHexString() token {
 		}
 		x := unhex(c)<<4 | unhex(c2)
 		if x < 0 {
-			fmt.Sprint(b.errorf("malformed hex string %c %c %s", c, c2, b.buf[b.pos:]))
+			fmt.Print(b.errorf("malformed hex string %c %c %s", c, c2, b.buf[b.pos:]))
 			break
 		}
 		tmp = append(tmp, byte(x))
@@ -229,6 +233,7 @@ func unhex(b byte) int {
 	return -1
 }
 
+// readLiteralString reads a literal string from the input stream.
 func (b *buffer) readLiteralString() token {
 	tmp := b.tmp[:0]
 	depth := 1
@@ -249,8 +254,7 @@ Loop:
 		case '\\':
 			switch c = b.readByte(); c {
 			default:
-				// b.errorf("invalid escape sequence \\%c", c)
-				fmt.Sprint(b.errorf("invalid escape sequence \\%c", c))
+				fmt.Print(b.errorf("invalid escape sequence \\%c", c))
 				tmp = append(tmp, '\\', c)
 			case 'n':
 				tmp = append(tmp, '\n')
@@ -292,6 +296,7 @@ Loop:
 	return string(tmp)
 }
 
+// readName reads a name from the input stream.
 func (b *buffer) readName() token {
 	tmp := b.tmp[:0]
 	for {
@@ -303,8 +308,7 @@ func (b *buffer) readName() token {
 		if c == '#' {
 			x := unhex(b.readByte())<<4 | unhex(b.readByte())
 			if x < 0 {
-				// b.errorf("malformed name")
-				fmt.Sprint(b.errorf("malformed name"))
+				fmt.Printf("malformed name: %s", b.errorf("malformed name"))
 			}
 			tmp = append(tmp, byte(x))
 			continue
@@ -317,6 +321,7 @@ func (b *buffer) readName() token {
 
 func (b *buffer) readKeyword() token {
 	tmp := b.tmp[:0]
+
 	for {
 		c := b.readByte()
 		if isDelim(c) || isSpace(c) {
@@ -325,6 +330,7 @@ func (b *buffer) readKeyword() token {
 		}
 		tmp = append(tmp, c)
 	}
+
 	b.tmp = tmp
 	s := string(tmp)
 	switch {
@@ -335,15 +341,13 @@ func (b *buffer) readKeyword() token {
 	case isInteger(s):
 		x, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
-			// b.errorf("invalid integer %s", s)
-			fmt.Sprint(b.errorf("invalid integer %s", s))
+			fmt.Printf("invalid integer %s", s)
 		}
 		return x
 	case isReal(s):
 		x, err := strconv.ParseFloat(s, 64)
 		if err != nil {
-			// b.errorf("invalid real %s", s)
-			fmt.Sprint(b.errorf("invalid real %s", s))
+			fmt.Printf("invalid real %s", s)
 		}
 		return x
 	}
@@ -378,10 +382,12 @@ func isReal(s string) bool {
 			ndot++
 			continue
 		}
+
 		if c < '0' || '9' < c {
 			return false
 		}
 	}
+
 	return ndot == 1
 }
 
@@ -462,8 +468,7 @@ func (b *buffer) readObject() (object, error) {
 				if _, ok := obj.(stream); !ok {
 					tok4 := b.readToken()
 					if tok4 != keyword("endobj") {
-						// b.errorf("missing endobj after indirect object definition")
-						fmt.Sprint(b.errorf("missing endobj after indirect object definition"))
+						fmt.Printf("missing endobj after indirect object def, tok4: %v\n", tok4)
 						b.unreadToken(tok4)
 					}
 				}
@@ -503,8 +508,7 @@ func (b *buffer) readDict() object {
 		}
 		n, ok := tok.(name)
 		if !ok {
-			// b.errorf("unexpected non-name key %T(%v) parsing dictionary", tok, tok)
-			fmt.Sprint(b.errorf("unexpected non-name key %T(%v) parsing dictionary", tok, tok))
+			fmt.Printf("unexpected non-name key %T(%v) parsing dictionary", tok, tok)
 			continue
 		}
 		res, err := b.readObject()
