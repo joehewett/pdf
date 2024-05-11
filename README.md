@@ -1,8 +1,11 @@
 # PDF Reader
 
-A simple Go library which enables reading PDF files. 
+A super lightweight, simple Go library which enables reading PDF files.
 
-This repository contains merged code from https://github.com/rsc/pdf and https://github.com/ledongthuc/pdf
+This repository is the maintained fork of:
+- https://github.com/joehewett/pdf, which is a fork of
+- https://github.com/ledongthuc/pdf, which was a fork of
+- https://github.com/rsc/pdf
 
 Features
   - Get plain text content (without formatting)
@@ -10,7 +13,7 @@ Features
 
 ## Install:
 
-`go get -u github.com/dslipak/pdf`
+`go get -u github.com/joehewett/pdf`
 
 
 ## Read plain text
@@ -22,7 +25,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/dslipak/pdf"
+	"github.com/joehewett/pdf"
 )
 
 func main() {
@@ -94,7 +97,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dslipak/pdf"
+	"github.com/joehewett/pdf"
 )
 
 func main() {
