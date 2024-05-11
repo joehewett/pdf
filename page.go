@@ -970,6 +970,7 @@ func (p Page) readContent(strm Value) Content {
 
 		case "Tm": // set text matrix and line matrix
 			if len(args) != 6 {
+				fmt.Printf("bad Tm: %v\n", args)
 				panic("bad g.Tm")
 			}
 			var m matrix
