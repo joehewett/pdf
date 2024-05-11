@@ -77,7 +77,7 @@ func (b *buffer) readByte() byte {
 }
 
 func (b *buffer) errorf(format string, args ...interface{}) error {
-	return fmt.Errorf(format, args...)
+	panic(fmt.Sprintf(format, args...))
 }
 
 // reload reads more data from the input stream.
